@@ -1,0 +1,10 @@
+.Rproj.user/
+.Rhistory
+.RData
+.RDataTmp
+Raw_Data/
+Outputs/
+*.rds
+*.nc
+"Outputs/" 
+"*.rds" 

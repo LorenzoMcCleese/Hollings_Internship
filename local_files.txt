@@ -1,0 +1,10 @@
+.RDataTmp
+.gitignore
+Hollings_Internship.Rproj
+Scripts/hindcast_testing_monthly/1_testing_freeman.R
+Scripts/hindcast_testing_monthly/2_MOM6_hindcast_work.R
+Scripts/hindcast_testing_monthly/76c49193-d326-467c-b595-7d4f8a317dbd.png
+Scripts/projection_testing_monthly/2_ROMs_projection.R
+shx_events_ts.rds
+shx_summary.rds
+sst_mhw_summary.rds
