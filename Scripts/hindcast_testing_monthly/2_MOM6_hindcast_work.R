@@ -7,6 +7,7 @@ library(ggplot2)
 library(sf)
 library(zoo)
 library(matrixStats)
+library(rnaturalearth)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # MHW DETECTION — SST AND BOTTOM TEMPERATURE
@@ -373,81 +374,81 @@ out_events_ts <- array(NA_integer_, dim = c(n_ih, n_jh, n_times))
 
 ## Step 2: Chunk loop ----------------------------------------------------------
 
-nc_sst     <- nc_open(sst_file)
-start_time <- Sys.time()
-
-for (j in 1:n_jh) {
-  
-  # Progress every 50 rows
-  if (j %% 50 == 0) {
-    elapsed <- round(difftime(Sys.time(), start_time, units = "mins"), 1)
-    cat("Row", j, "of", n_jh, "| Elapsed:", elapsed, "mins\n")
-  }
-  
-  # Skip if no ocean cells in this row
-  if (!any(ocean_mask[, j], na.rm = TRUE)) next
-  
-  # Load entire row at once: [342 x 390]
-  sst_row <- ncvar_get(nc_sst, "tos",
-                       start = c(1, j, 1),
-                       count = c(-1, 1, -1))
-  
-  for (i in 1:n_ih) {
-    
-    # Skip land
-    if (!ocean_mask[i, j]) next
-    
-    # EXACT SAME STEPS AS SINGLE POINT CODE
-    
-    ts <- sst_row[i, ]
-    if (all(is.na(ts))) next
-    
-    ### 1: P90 threshold --------------------------------------------------
-    thresh_90 <- compute_threshold(ts, months, percentile = 0.90, window = 1)
-    thresh_ts <- thresh_90[months]
-    
-    ### 2: Flag exceedances ----------------------------------------------------
-    exceeds <- ifelse(ts > thresh_ts, 1, 0)
-    exceeds[is.na(exceeds)] <- 0
-    
-    ### 3: Merge close events --------------------------------------------------
-    exceeds_merged <- merge_events(exceeds, max_gap = 1)
-    
-    ### 4: Remove short events --------------------------------------------------------
-    events <- remove_short_events(exceeds_merged, min_duration = 2)
-    
-    ### Step 5: Anomaly --------------------------------------------------------
-    anomaly <- compute_anomaly(ts, months)
-    
-    ### 6: Characterize (inline version of characterize_events) -----------------
-    r      <- rle(events)
-    ends   <- cumsum(r$lengths)
-    starts <- ends - r$lengths + 1
-    
-    durations  <- c()
-    intensities <- c()
-    for (k in seq_along(r$values)) {
-      if (r$values[k] == 1) {
-        idx         <- starts[k]:ends[k]
-        durations   <- c(durations,   length(idx))
-        intensities <- c(intensities, mean(anomaly[idx], na.rm = TRUE))
-      }
-    }
-    
-    # Store results
-    out_n_events[i, j]       <- length(durations)
-    out_freq[i, j]           <- length(durations) / n_years
-    out_mean_duration[i, j]  <- ifelse(length(durations) > 0,
-                                       mean(durations), 0)
-    out_mean_intensity[i, j] <- ifelse(length(intensities) > 0,
-                                       mean(intensities), 0)
-    out_events_ts[i, j, ]   <- events
-  }
-}
-
-nc_close(nc_sst)
-cat("Done! Total time:",
-    round(difftime(Sys.time(), start_time, units = "mins"), 1), "mins\n")
+# nc_sst     <- nc_open(sst_file)
+# start_time <- Sys.time()
+# 
+# for (j in 1:n_jh) {
+#   
+#   # Progress every 50 rows
+#   if (j %% 50 == 0) {
+#     elapsed <- round(difftime(Sys.time(), start_time, units = "mins"), 1)
+#     cat("Row", j, "of", n_jh, "| Elapsed:", elapsed, "mins\n")
+#   }
+#   
+#   # Skip if no ocean cells in this row
+#   if (!any(ocean_mask[, j], na.rm = TRUE)) next
+#   
+#   # Load entire row at once: [342 x 390]
+#   sst_row <- ncvar_get(nc_sst, "tos",
+#                        start = c(1, j, 1),
+#                        count = c(-1, 1, -1))
+#   
+#   for (i in 1:n_ih) {
+#     
+#     # Skip land
+#     if (!ocean_mask[i, j]) next
+#     
+#     # EXACT SAME STEPS AS SINGLE POINT CODE
+#     
+#     ts <- sst_row[i, ]
+#     if (all(is.na(ts))) next
+#     
+#     ### 1: P90 threshold --------------------------------------------------
+#     thresh_90 <- compute_threshold(ts, months, percentile = 0.90, window = 1)
+#     thresh_ts <- thresh_90[months]
+#     
+#     ### 2: Flag exceedances ----------------------------------------------------
+#     exceeds <- ifelse(ts > thresh_ts, 1, 0)
+#     exceeds[is.na(exceeds)] <- 0
+#     
+#     ### 3: Merge close events --------------------------------------------------
+#     exceeds_merged <- merge_events(exceeds, max_gap = 1)
+#     
+#     ### 4: Remove short events --------------------------------------------------------
+#     events <- remove_short_events(exceeds_merged, min_duration = 2)
+#     
+#     ### Step 5: Anomaly --------------------------------------------------------
+#     anomaly <- compute_anomaly(ts, months)
+#     
+#     ### 6: Characterize (inline version of characterize_events) -----------------
+#     r      <- rle(events)
+#     ends   <- cumsum(r$lengths)
+#     starts <- ends - r$lengths + 1
+#     
+#     durations  <- c()
+#     intensities <- c()
+#     for (k in seq_along(r$values)) {
+#       if (r$values[k] == 1) {
+#         idx         <- starts[k]:ends[k]
+#         durations   <- c(durations,   length(idx))
+#         intensities <- c(intensities, mean(anomaly[idx], na.rm = TRUE))
+#       }
+#     }
+#     
+#     # Store results
+#     out_n_events[i, j]       <- length(durations)
+#     out_freq[i, j]           <- length(durations) / n_years
+#     out_mean_duration[i, j]  <- ifelse(length(durations) > 0,
+#                                        mean(durations), 0)
+#     out_mean_intensity[i, j] <- ifelse(length(intensities) > 0,
+#                                        mean(intensities), 0)
+#     out_events_ts[i, j, ]   <- events
+#   }
+# }
+# 
+# nc_close(nc_sst)
+# cat("Done! Total time:",
+#     round(difftime(Sys.time(), start_time, units = "mins"), 1), "mins\n")
 # first round went 17 min
 
 ## Part 3. Save ----------------------------------------------------------------
@@ -470,7 +471,9 @@ cat("Done! Total time:",
 #   time_vec  = time_vec,
 #   lon2d     = lon2d,
 #   lat2d     = lat2d
-), "sst_mhw_events_ts.rds")
+# ), "sst_mhw_events_ts.rds")
+
+output_dir <- 'C:/Users/mcclo/OneDrive/Documents/Hollings_Internship/Outputs'
 
 setwd("C:/Users/mcclo/OneDrive/Documents/Hollings_Internship")
 getwd()
@@ -820,6 +823,8 @@ bottom_mask <- ocean_mask & depth < 1000
 # setwd("C:/Users/mcclo/OneDrive/Documents/Hollings_Internship")
 # getwd()
 
+output_dir <- 'C:/Users/mcclo/OneDrive/Documents/Hollings_Internship/Outputs'
+
 bT_summary <- readRDS(file.path(output_dir, "bT_mhw_summary.rds"))
 out_n_events_bT       <- bT_summary$n_events
 out_freq_bT           <- bT_summary$freq
@@ -998,17 +1003,16 @@ ggplot(df_compare, aes(x = time)) +
   geom_rect(
     data = df_compare %>% filter(compound == 1),
     aes(xmin = time - 15, xmax = time + 15, ymin = -Inf, ymax = Inf),
-    fill = NA, color = "gold", linewidth = 0.9
+    fill = NA, color = "gold", linewidth = 1.5
   ) +
-  geom_line(aes(y = scale(z_SST)[, 1], color = "SST"),         linewidth = 0.75) +
-  geom_line(aes(y = scale(z_bT)[, 1],  color = "Bottom Temp"), linewidth = 0.75) +
-  scale_color_manual(values = c("SST" = "#D55E00", "Bottom Temp" = "#0072B2")) +
+  geom_line(aes(y = scale(z_SST)[, 1], color = "SST"),         linewidth = 1) +
+  geom_line(aes(y = scale(z_bT)[, 1],  color = "Bottom Temp"), linewidth = 1) +
+  scale_color_manual(values = c("SST" = "#FFC1C1", "Bottom Temp" = "lightblue")) +
   labs(
     title    = paste("Compound SMHW + BMHW | lon: -122.02",
                      "lat:", round(lat2d[ilon, ilat], 2)),
     subtitle = paste(
-      "Freeman et al. method | Gold = compound\n",
-      "Compound intensity = Z_SST x Z_bT (standardized)"
+      "Gold = compound\n"
     ),
     y = "Standardized Anomaly (z-score)", x = NULL, color = NULL
   ) + theme_light()
@@ -1076,6 +1080,10 @@ df_fractions <- data.frame(
 ## Part 3: Plots  --------------------------------------------------------------
 
 ### Plot 1 - SST MHW Fraction --------------------------------------------------
+max_sst <- df_fractions[df_fractions$sst == max(df_fractions$sst, na.rm = TRUE), ]
+print(max_sst)
+
+
 p_sst <- ggplot(df_fractions, aes(x = time, y = sst)) +
   geom_area(fill = "red", alpha = 0.4) +
   geom_line(color = "darkred", linewidth = 0.75) +
@@ -1083,9 +1091,13 @@ p_sst <- ggplot(df_fractions, aes(x = time, y = sst)) +
     title    = "Spatial Extent of Surface MHWs | MOM6 1993-2025",
     y        = "% domain in SMHW",
     x        = NULL
-  )
+  ) +
+  coord_cartesian(ylim = c(0, 45)) + theme_light()
 
 ### Plot 2 - bT MHW Fraction ---------------------------------------------------
+
+max_bT <- df_fractions[df_fractions$bT == max(df_fractions$bT, na.rm = TRUE), ]
+print(max_bT)
 
 p_bT <- ggplot(df_fractions, aes(x = time, y = bT)) +
   geom_area(fill = "blue", alpha = 0.4) +
@@ -1095,7 +1107,8 @@ p_bT <- ggplot(df_fractions, aes(x = time, y = bT)) +
     subtitle = "depth < 1000m only",
     y        = "% domain in BMHW",
     x        = NULL
-  )
+  ) +
+  coord_cartesian(ylim = c(0, 45)) + theme_light()
 
 
 ### Plot 3 - Compound Fraction -------------------------------------------------
@@ -1454,7 +1467,7 @@ ggplot(df_o2, aes(x = time)) +
       "Gold dots = fully oxygenated (undefined HLD, excluded from events)\n"
     ),
     y = "HLD Depth (m, positive down)", x = NULL
-  )
+  ) + theme_light()
 
 ## Step 13: Compound MHW + SHX -------------------------------------------------
 
@@ -1679,123 +1692,62 @@ df_fractions$shx <- frac_shx
 p_shx <- ggplot(df_fractions, aes(x = time, y = shx)) +
   geom_area(fill = "steelblue", alpha = 0.4) +
   geom_line(color = "steelblue4", linewidth = 0.75) +
-  geom_hline(yintercept = 5, linetype = "dashed", linewidth = 0.5) +
   labs(
     title    = "Spatial Extent of SHX | MOM6 1993-2025",
-    subtitle = "Dashed = 5% threshold",
     y        = "% domain in SHX",
     x        = NULL
-  )
+  )  +
+  coord_cartesian(ylim = c(0, 45)) + theme_light()
 
+print(max(df_fractions$shx))
+max_shx <- df_fractions[df_fractions$shx == max(df_fractions$shx, na.rm = TRUE), ]
+
+p_shx <- ggplot(df_fractions, aes(x = time, y = shx)) +
+  geom_area(fill = "steelblue", alpha = 0.4) +
+  geom_line(color = "steelblue4", linewidth = 0.75) +
+  geom_point(
+    data = max_shx,
+    aes(x = time, y = shx),
+    color = "red",
+    size = 3
+  ) +
+  labs(
+    title = "Spatial Extent of SHX | MOM6 1993-2025",
+    y = "% domain in SHX",
+    x = NULL
+  ) +
+  coord_cartesian(ylim = c(0, 45)) +
+  theme_light()
+
+
+p_sst_max <- ggplot(df_fractions, aes(x = time, y = sst)) +
+  geom_area(fill = "red", alpha = 0.4) +
+  geom_line(color = "darkred", linewidth = 0.75) +
+  geom_point(
+    data = max_sst,
+    aes(x = time, y = sst),
+    color = "red",
+    size = 3
+  ) +
+  labs(
+    title    = "Spatial Extent of Surface MHWs | MOM6 1993-2025",
+    y        = "% domain in SMHW",
+    x        = NULL
+  ) +
+  coord_cartesian(ylim = c(0, 45)) + theme_light()
+
+
+print(max_sst)
+print(max_bT)
+print(max_shx)
+p_sst_max
+p_shx 
 
 # Stack all four
 p_sst / p_bT / p_shx / p_compound +
   plot_annotation(
     title    = "Marine Extreme Spatial Extent | MOM6 Northeast Pacific Hindcast 1993-2025"
   )
-
-
-
-# PART 5: 2D Mapping  -----------------------------------------------------------
-nc_grid  <- nc_open(grid_file)
-lon_c <- ncvar_get(nc_grid, "geolon_c")  # corner longitudes
-lat_c <- ncvar_get(nc_grid, "geolat_c")  # corner latitudes
-nc_close(nc_grid)
-
-cat("Center grid dims:", dim(lon2d), "\n")    #  342 x 816
-cat("Corner grid dims:", dim(lon_c), "\n")    #  343 x 817
-
-lon_c_180 <- ifelse(lon_c > 180, lon_c - 360, lon_c)
-
-## Convert to sf and plot -----------------------------------------------------
-
-build_sf_grid <- function(mat, mask, every_nth = 1, max_lon_span = 10) {
-  
-  mat[!mask] <- NA
-  
-  i_idx <- seq(1, n_ih, by = every_nth)
-  j_idx <- seq(1, n_jh, by = every_nth)
-  
-  polys  <- vector("list", sum(!is.na(mat[i_idx, j_idx])))
-  values <- numeric(length(polys))
-  cell_id <- 0
-  
-  for (j in j_idx) {
-    for (i in i_idx) {
-      
-      if (is.na(mat[i, j])) next
-      
-      lons <- c(lon_c_180[i,   j], lon_c_180[i+1, j],
-                lon_c_180[i+1, j+1], lon_c_180[i, j+1],
-                lon_c_180[i,   j])
-      lats <- c(lat_c[i,   j], lat_c[i+1, j],
-                lat_c[i+1, j+1], lat_c[i, j+1],
-                lat_c[i,   j])
-      
-      if (diff(range(lons)) > max_lon_span) next
-      
-      cell_id <- cell_id + 1
-      polys[[cell_id]]  <- st_polygon(list(cbind(lons, lats)))
-      values[cell_id]   <- mat[i, j]
-    }
-  }
-  
-  if (cell_id == 0) {
-    warning("No valid cells found for this mask. returning empty sf object")
-    return(st_sf(value = numeric(0), geometry = st_sfc(crs = 4326)))
-  }
-  
-  polys  <- polys[1:cell_id]
-  values <- values[1:cell_id]
-  
-  st_sf(value = values, geometry = st_sfc(polys, crs = 4326))
-}
-
-plot_spatial_sf <- function(mat, mask, title, legend_label, every_nth = 1, max_lon_span = 10) {
-  
-  sf_grid <- build_sf_grid(mat, mask, every_nth, max_lon_span)
-  
-  ggplot(sf_grid) +
-    geom_sf(aes(fill = value), color = NA) +
-    scale_fill_viridis_c(name = legend_label, na.value = "gray90") +
-    coord_sf(xlim = c(-180, -100), ylim = c(10, 80)) +
-    labs(title = title, subtitle = "MOM6 1993-2025 | Monthly",
-         x = "Longitude", y = "Latitude")
-}
-
-# every_nth = 1 for full resolution
-shx_plot_mask <- ocean_mask & !is.na(out_freq_shx)
-
-# SST
-plot_spatial_sf(out_freq, ocean_mask,  "SST MHW Frequency",      "Events/yr",  every_nth = 1)
-plot_spatial_sf(out_mean_duration, ocean_mask,  "SST MHW Mean Duration",  "Months",     every_nth = 1)
-plot_spatial_sf(out_mean_intensity, ocean_mask,  "SST MHW Mean Intensity", "Z-score",    every_nth = 1)
-
-# bT
-plot_spatial_sf(out_freq_bT, bottom_mask, "Bottom MHW Frequency",   "Events/yr",  every_nth = 1)
-plot_spatial_sf(out_mean_duration_bT, bottom_mask,  "Bottom MHW Mean Duration",  "Months",     every_nth = 1)
-plot_spatial_sf(out_mean_intensity_bT, bottom_mask,  "Bottom MHW Mean Intensity", "Z-score",    every_nth = 1)
-
-# SHX
-out_mean_intensity_shx <- -out_mean_intensity_shx
-plot_spatial_sf(out_freq_shx, shx_plot_mask,  "SHX Frequency",          "Events/yr",  every_nth = 1)
-plot_spatial_sf(out_mean_duration_shx, shx_plot_mask,  "SHX Mean Duration",  "Months",     every_nth = 1)
-plot_spatial_sf(out_mean_intensity_shx, shx_plot_mask,  "SHX Mean Intensity", "Z-score",    every_nth = 1)
-
-
-# How many cells had hypoxia at any point?
-cells_with_any_hypoxia <- apply(out_events_ts_shx, c(1,2), function(x) any(x == 1, na.rm = TRUE))
-cat("Cells with at least one SHX event:", sum(cells_with_any_hypoxia, na.rm = TRUE), "\n")
-cat("Total ocean cells:", sum(ocean_mask), "\n")
-
-# Where are they?
-plot_spatial_sf(
-  ifelse(cells_with_any_hypoxia, 1, NA),
-  ocean_mask, 
-  "Cells with any SHX event", 
-  "1 = yes"
-)
-
 
 # PART 4c: SHX P10 Depth Threshold Map - lean loop -----------------------------
 # Skips flagging/merging/duration-filtering/anomaly/characterization
@@ -1894,9 +1846,188 @@ if (file.exists(checkpoint_file)) {
 # saveRDS(out_anomaly_shx, file.path(output_dir, "anomaly_shx_grid.rds"))
 # file.remove(checkpoint_file)
 # 
-# out_thresh_shx <- readRDS(file.path(output_dir, "shx_thresh_depth_map.rds"))
-# out_anomalygrid_shx <- readRDS(file.path(output_dir, "anomaly_shx_grid.rds"))
+ out_thresh_shx <- readRDS(file.path(output_dir, "shx_thresh_depth_map.rds"))
+ out_anomalygrid_shx <- readRDS(file.path(output_dir, "anomaly_shx_grid.rds"))
 
+# Spatial extent over time (Part 3b/6 style, now every pairing gets its own panel)
+compound_sst_bT  <- out_events_ts * out_events_ts_bT
+compound_sst_shx <- out_events_ts * out_events_ts_shx
+compound_bT_shx  <- out_events_ts_bT * out_events_ts_shx
+compound_triple  <- out_events_ts * out_events_ts_bT * out_events_ts_shx
+
+df_fractions$compound_sst_bT  <- fraction_over_time(compound_sst_bT,  bottom_mask) * 100
+df_fractions$compound_sst_shx <- fraction_over_time(compound_sst_shx, ocean_mask)  * 100
+df_fractions$compound_bT_shx  <- fraction_over_time(compound_bT_shx,  bottom_mask) * 100
+df_fractions$triple           <- fraction_over_time(compound_triple,  bottom_mask) * 100
+
+p_compound_sst_bT <- ggplot(df_fractions, aes(x = time, y = compound_sst_bT)) +
+  geom_area(fill = "purple", alpha = 0.4) + geom_line(color = "purple4", linewidth = 0.75) +
+  labs(title = "SMHW x BMHW", y = "% domain", x = NULL)
+
+p_compound_sst_shx <- ggplot(df_fractions, aes(x = time, y = compound_sst_shx)) +
+  geom_area(fill = "orange", alpha = 0.4) + geom_line(color = "darkorange3", linewidth = 0.75) +
+  labs(title = "SMHW x SHX", y = "% domain", x = NULL)
+
+p_compound_bT_shx <- ggplot(df_fractions, aes(x = time, y = compound_bT_shx)) +
+  geom_area(fill = "seagreen", alpha = 0.4) + geom_line(color = "seagreen4", linewidth = 0.75) +
+  labs(title = "BMHW x SHX", y = "% domain", x = NULL)
+
+p_triple <- ggplot(df_fractions, aes(x = time, y = triple)) +
+  geom_area(fill = "black", alpha = 0.4) + geom_line(color = "black", linewidth = 0.75) +
+  labs(title = "Triple Compound (SMHW+BMHW+SHX)", y = "% domain", x = NULL)
+
+p_sst / p_bT / p_shx / p_compound_sst_bT / p_compound_sst_shx / p_compound_bT_shx / p_triple +
+  plot_annotation(title = "All Compound Extremes | MOM6 Hindcast 1993-2025")
+
+# Intensity maps
+plot_spatial_sf(res_sst_bT$mean_intensity,  bottom_mask, "SMHW x BMHW Intensity", "Z-score")
+plot_spatial_sf(res_sst_shx$mean_intensity, ocean_mask,  "SMHW x SHX Intensity",  "Z-score")
+plot_spatial_sf(res_bT_shx$mean_intensity,  bottom_mask, "BMHW x SHX Intensity",  "Z-score")
+
+
+# PART 5: 2D Mapping  -----------------------------------------------------------
+nc_grid  <- nc_open(grid_file)
+lon_c <- ncvar_get(nc_grid, "geolon_c")  # corner longitudes
+lat_c <- ncvar_get(nc_grid, "geolat_c")  # corner latitudes
+nc_close(nc_grid)
+
+cat("Center grid dims:", dim(lon2d), "\n")    #  342 x 816
+cat("Corner grid dims:", dim(lon_c), "\n")    #  343 x 817
+
+lon_c_180 <- ifelse(lon_c > 180, lon_c - 360, lon_c)
+
+## Convert to sf and plot -----------------------------------------------------
+
+build_sf_grid <- function(mat, mask, every_nth = 1, max_lon_span = 10) {
+  
+  mat[!mask] <- NA
+  
+  i_idx <- seq(1, n_ih, by = every_nth)
+  j_idx <- seq(1, n_jh, by = every_nth)
+  
+  polys  <- vector("list", sum(!is.na(mat[i_idx, j_idx])))
+  values <- numeric(length(polys))
+  cell_id <- 0
+  
+  for (j in j_idx) {
+    for (i in i_idx) {
+      
+      if (is.na(mat[i, j])) next
+      
+      lons <- c(lon_c_180[i,   j], lon_c_180[i+1, j],
+                lon_c_180[i+1, j+1], lon_c_180[i, j+1],
+                lon_c_180[i,   j])
+      lats <- c(lat_c[i,   j], lat_c[i+1, j],
+                lat_c[i+1, j+1], lat_c[i, j+1],
+                lat_c[i,   j])
+      
+      if (diff(range(lons)) > max_lon_span) next
+      
+      cell_id <- cell_id + 1
+      polys[[cell_id]]  <- st_polygon(list(cbind(lons, lats)))
+      values[cell_id]   <- mat[i, j]
+    }
+  }
+  
+  if (cell_id == 0) {
+    warning("No valid cells found for this mask. returning empty sf object")
+    return(st_sf(value = numeric(0), geometry = st_sfc(crs = 4326)))
+  }
+  
+  polys  <- polys[1:cell_id]
+  values <- values[1:cell_id]
+  
+  st_sf(value = values, geometry = st_sfc(polys, crs = 4326))
+}
+
+land <- ne_countries(scale = "medium", returnclass = "sf")
+
+plot_spatial_sf <- function(mat, mask, title, legend_label,
+                            every_nth = 1, max_lon_span = 10) {
+  sf_grid <- build_sf_grid(mat, mask, every_nth, max_lon_span)
+
+  ggplot() +
+    geom_sf(data = sf_grid, aes(fill = value), color = NA) +
+    
+    geom_sf(
+      data = land,
+      fill = "grey70",
+      color = "black",
+      linewidth = 0.3
+    ) +
+    scale_fill_gradientn(
+      colours = c("white", "#9ecae1", "#3182bd", "#08306b"),
+      name = legend_label,
+      na.value = "white"
+    ) +
+    coord_sf(xlim = c(-180, -100), ylim = c(10, 80), expand = FALSE) +
+    labs(
+      title = title,
+      subtitle = "MOM6 1993–2025 | Monthly",
+      x = "Longitude",
+      y = "Latitude"
+    ) + theme_light()
+}
+
+plot_spatial_sf_sqrt <- function(mat, mask, title, legend_label,
+                            every_nth = 1, max_lon_span = 10) {
+  
+  sf_grid <- build_sf_grid(mat, mask, every_nth, max_lon_span)
+  
+  ggplot() +
+    geom_sf(data = sf_grid, aes(fill = value), color = NA) +
+    geom_sf(
+      data = land,
+      fill = "grey70",
+      color = "black",
+      linewidth = 0.3
+    ) +
+    scale_fill_gradientn(
+      colours = c("white", "#9ecae1", "#3182bd", "#08306b"),
+      trans = "sqrt",
+      name = legend_label
+    ) +
+    coord_sf(xlim = c(-180, -100), ylim = c(10, 80), expand = FALSE) +
+    labs(
+      title = title,
+      subtitle = "MOM6 1993–2025 | Monthly",
+      x = "Longitude",
+      y = "Latitude"
+    ) + theme_light()
+}
+
+# every_nth = 1 for full resolution
+shx_plot_mask <- ocean_mask & !is.na(out_freq_shx)
+
+# SST
+plot_spatial_sf(out_freq, ocean_mask, "SST MHW Frequency", "Events/yr", every_nth = 1)
+plot_spatial_sf(out_mean_duration, ocean_mask, "SST MHW Mean Duration",  "Months", every_nth = 1)
+plot_spatial_sf(out_mean_intensity, ocean_mask, "SST MHW Mean Intensity", "Z-score", every_nth = 1)
+
+# bT
+plot_spatial_sf(out_freq_bT, bottom_mask, "Bottom MHW Frequency", "Events/yr", every_nth = 1)
+plot_spatial_sf_sqrt(out_mean_duration_bT, bottom_mask, "Bottom MHW Mean Duration", "Months", every_nth = 1)
+plot_spatial_sf(out_mean_intensity_bT, bottom_mask, "Bottom MHW Mean Intensity", "Z-score", every_nth = 1)
+
+# SHX
+out_mean_intensity_shx <- -out_mean_intensity_shx
+plot_spatial_sf(out_freq_shx, shx_plot_mask, "SHX Frequency", "Events/yr", every_nth = 1)
+plot_spatial_sf_sqrt(out_mean_duration_shx, shx_plot_mask, "SHX Mean Duration", "Months", every_nth = 1)
+plot_spatial_sf(out_mean_intensity_shx, shx_plot_mask, "SHX Mean Intensity", "Z-score", every_nth = 1)
+
+
+# How many cells had hypoxia at any point?
+cells_with_any_hypoxia <- apply(out_events_ts_shx, c(1,2), function(x) any(x == 1, na.rm = TRUE))
+cat("Cells with at least one SHX event:", sum(cells_with_any_hypoxia, na.rm = TRUE), "\n")
+cat("Total ocean cells:", sum(ocean_mask), "\n")
+
+# Where are they?
+plot_spatial_sf(
+  ifelse(cells_with_any_hypoxia, 1, NA),
+  ocean_mask, 
+  "Cells with any SHX event", 
+  "1 = yes"
+)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1905,88 +2036,183 @@ if (file.exists(checkpoint_file)) {
 # ══════════════════════════════════════════════════════════════════════════════
 
 # Reload if starting fresh
-# out_events_ts<- readRDS(file.path(output_dir, "sst_mhw_events_ts.rds"))$events_ts
-# out_events_ts_bT  <- readRDS(file.path(output_dir, "bT_mhw_events_ts.rds"))$events_ts
-# out_events_ts_shx <- readRDS(file.path(output_dir, "shx_events_ts.rds"))$events_ts
+out_events_ts<- readRDS(file.path(output_dir, "sst_mhw_events_ts.rds"))$events_ts
+out_events_ts_bT  <- readRDS(file.path(output_dir, "bT_mhw_events_ts.rds"))$events_ts
+out_events_ts_shx <- readRDS(file.path(output_dir, "shx_events_ts.rds"))$events_ts
 
 # per-cell frequency/duration/n_events for ANY compound
 # defined as element-wise product of 2 or 3 boolean event arrays
-compound_grid_full <- function(events_a, events_b, anomaly_a, anomaly_b,
-                               valid_mask, n_years, min_duration = 2) {
-  n_ih <- dim(events_a)[1]; n_jh <- dim(events_a)[2]
-  out_n <- matrix(NA_real_, n_ih, n_jh)
+compound_grid_triple <- function(events_a, events_b, events_c,
+                                 anomaly_a, anomaly_b, anomaly_c,
+                                 valid_mask, n_years, min_duration = 2) {
+  
+  n_ih <- dim(events_a)[1]
+  n_jh <- dim(events_a)[2]
+  
+  out_n    <- matrix(NA_real_, n_ih, n_jh)
   out_freq <- matrix(NA_real_, n_ih, n_jh)
   out_dur  <- matrix(NA_real_, n_ih, n_jh)
   out_int  <- matrix(NA_real_, n_ih, n_jh)
   
   for (j in 1:n_jh) {
     if (!any(valid_mask[, j], na.rm = TRUE)) next
+    
     for (i in 1:n_ih) {
       if (!valid_mask[i, j]) next
       
-      exceeds <- ifelse(events_a[i, j, ] == 1 & events_b[i, j, ] == 1, 1, 0)
+      exceeds <- ifelse(
+        events_a[i, j, ] == 1 &
+          events_b[i, j, ] == 1 &
+          events_c[i, j, ] == 1,
+        1, 0
+      )
+      
       exceeds[is.na(exceeds)] <- 0
       events <- remove_short_events(exceeds, min_duration)
+      
       if (sum(events) == 0) next
       
-      # Freeman 2.4: intensity = Z_a x Z_b, standardized
-      raw_intensity <- anomaly_a[i, j, ] * anomaly_b[i, j, ]
+      ## Triple intensity
+      raw_intensity <-
+        anomaly_a[i, j, ] *
+        anomaly_b[i, j, ] *
+        anomaly_c[i, j, ]
+      
       z_intensity <- (raw_intensity - mean(raw_intensity, na.rm = TRUE)) /
         sd(raw_intensity, na.rm = TRUE)
       
       r <- rle(events)
-      ends <- cumsum(r$lengths); starts <- ends - r$lengths + 1
-      durations <- c(); intensities <- c()
+      ends <- cumsum(r$lengths)
+      starts <- ends - r$lengths + 1
+      
+      durations <- c()
+      intensities <- c()
+      
       for (k in seq_along(r$values)) {
         if (r$values[k] == 1) {
           idx <- starts[k]:ends[k]
           durations <- c(durations, length(idx))
-          intensities <- c(intensities, mean(z_intensity[idx], na.rm = TRUE))
+          intensities <- c(intensities,
+                           mean(z_intensity[idx], na.rm = TRUE))
         }
       }
-      out_n[i, j] <- length(durations)
+      
+      out_n[i, j]    <- length(durations)
       out_freq[i, j] <- length(durations) / n_years
-      out_dur[i, j] <- mean(durations)
-      out_int[i, j] <- mean(intensities)
+      out_dur[i, j]  <- mean(durations)
+      out_int[i, j]  <- mean(intensities)
     }
   }
-  list(n_events = out_n, freq = out_freq, mean_duration = out_dur, mean_intensity = out_int)
+  
+  list(
+    n_events = out_n,
+    freq = out_freq,
+    mean_duration = out_dur,
+    mean_intensity = out_int
+  )
 }
 
 res_sst_bT  <- compound_grid_full(out_events_ts, out_events_ts_bT,  anomaly_sst_grid, anomaly_bT_grid,  bottom_mask, n_years)
 res_sst_shx <- compound_grid_full(out_events_ts, out_events_ts_shx, anomaly_sst_grid, out_anomaly_shx,  ocean_mask,  n_years)
 res_bT_shx  <- compound_grid_full(out_events_ts_bT, out_events_ts_shx, anomaly_bT_grid, out_anomaly_shx, bottom_mask, n_years)
-
-## SMHW × BMHW (full grid)
-compound_sst_bT <- out_events_ts * out_events_ts_bT
-res_sst_bT <- compound_grid_freq_duration(compound_sst_bT, bottom_mask, n_years)
-
-## SMHW × SHX (full grid)
-compound_sst_shx <- out_events_ts * out_events_ts_shx
-res_sst_shx <- compound_grid_freq_duration(compound_sst_shx, ocean_mask, n_years)
-
-## BMHW × SHX (full grid)
-compound_bT_shx <- out_events_ts_bT * out_events_ts_shx
-res_bT_shx <- compound_grid_freq_duration(compound_bT_shx, bottom_mask, n_years)
-
-## Triple: SMHW × BMHW × SHX (full grid)
-compound_triple <- out_events_ts * out_events_ts_bT * out_events_ts_shx
-res_triple <- compound_grid_freq_duration(compound_triple, bottom_mask, n_years)
+res_triple <- compound_grid_triple(
+  out_events_ts,
+  out_events_ts_bT,
+  out_events_ts_shx,
+  anomaly_sst_grid,
+  anomaly_bT_grid,
+  out_anomaly_shx,
+  bottom_mask,     
+  n_years
+)
 
 ## Save  -----------------------------------------------------------------
-saveRDS(list(
-   sst_bT  = res_sst_bT,
-   sst_shx = res_sst_shx,
-   bT_shx  = res_bT_shx,
-   triple  = res_triple,
-   lon2d = lon2d, lat2d = lat2d
-), file.path(output_dir, "compound_grid_summary.rds"))
+# saveRDS(list(
+#    sst_bT  = res_sst_bT,
+#    sst_shx = res_sst_shx,
+#    bT_shx  = res_bT_shx,
+#    triple  = res_triple,
+#    lon2d = lon2d, lat2d = lat2d
+# ), file.path(output_dir, "compound_grid_summary.rds"))
 
 compound_summary <- readRDS(file.path(output_dir, "compound_grid_summary.rds"))
 res_sst_bT  <- compound_summary$sst_bT
 res_sst_shx <- compound_summary$sst_shx
 res_bT_shx  <- compound_summary$bT_shx
 res_triple  <- compound_summary$triple
+
+n_sst_bT  <- res_sst_bT$n_events
+n_sst_shx <- res_sst_shx$n_events
+n_bT_shx  <- res_bT_shx$n_events
+n_triple  <- res_triple$n_events
+
+plot_spatial_sf(res_sst_bT$n_events,  bottom_mask,
+                "SMHW × BMHW Number of Events", "Events")
+
+plot_spatial_sf(res_sst_shx$n_events, ocean_mask,
+                "SMHW × SHX Number of Events", "Events")
+
+plot_spatial_sf(res_bT_shx$n_events, bottom_mask,
+                "BMHW × SHX Number of Events", "Events")
+
+
+plot_spatial_sf_counts <- function(mat, mask, title, legend_label,
+                                   every_nth = 1, max_lon_span = 10,
+                                   breaks = c(0, 1, 2, 3, 5, Inf),
+                                   labels = c("0", "1", "2", "3-4", "5+")) {
+  
+  # Treat true zero-event cells as background, not a "color" —
+  # this is what actually makes rare events pop: only cells with
+  # real compound activity get colored at all.
+  mat_display <- mat
+  mat_display[mat_display == 0] <- NA
+  
+  sf_grid <- build_sf_grid(mat_display, mask, every_nth, max_lon_span)
+  
+  # Bin into discrete categories instead of a continuous scale —
+  # for small integer counts, a legend with distinct colors per
+  # count reads far better than a gradient where 1 vs 2 events
+  # are nearly indistinguishable shades of blue.
+  sf_grid$bin <- cut(sf_grid$value, breaks = breaks, labels = labels,
+                     include.lowest = TRUE, right = FALSE)
+  
+  ggplot() +
+    geom_sf(data = land, fill = "grey15", color = "grey40", linewidth = 0.2) +
+    geom_sf(data = sf_grid, aes(fill = bin), color = NA) +
+    scale_fill_viridis_d(option = "plasma", name = legend_label,
+                         na.translate = FALSE) +
+    coord_sf(xlim = c(-180, -100), ylim = c(10, 80), expand = FALSE) +
+    labs(title = title, subtitle = "MOM6 1993–2025 | Monthly",
+         x = "Longitude", y = "Latitude") +
+    theme_light() +
+    theme(
+      panel.background = element_rect(fill = "black", colour = NA),
+      panel.grid = element_line(colour = "grey20", linewidth = 0.15),
+      plot.background = element_rect(fill = "grey10", colour = NA),
+      plot.title = element_text(colour = "white", face = "bold"),
+      plot.subtitle = element_text(colour = "grey70"),
+      axis.text = element_text(colour = "grey80"),
+      axis.title = element_text(colour = "grey80"),
+      legend.background = element_rect(fill = "grey10", colour = NA),
+      legend.key = element_rect(fill = "black", colour = NA),
+      legend.text = element_text(colour = "white"),
+      legend.title = element_text(colour = "white")
+    )
+}
+
+plot_spatial_sf_counts(res_bT_shx$n_events, bottom_mask,
+                       "BMHW × SHX Number of Events", "Events")
+
+plot_spatial_sf_counts(res_triple$n_events, bottom_mask,
+                       "Triple Compound Number of Events", "Events")
+
+p_triple_map <- plot_spatial_sf_counts(res_triple$n_events, bottom_mask,
+                                       "Triple Compound Number of Events", "Events")
+
+p_triple_map +
+  geom_point(data = hotspot_df, aes(x = lon, y = lat),
+             shape = 21, size = 6, stroke = 1.8,
+             color = "red", fill = NA)
 
 
 ## Likelihood Multiplication Factor (grid version) -----------------------------
@@ -2007,8 +2233,8 @@ LMF_sst_bT  <- compute_LMF(res_sst_bT$freq, out_freq, out_freq_bT, n_years)
 LMF_sst_shx <- compute_LMF(res_sst_shx$freq, out_freq, out_freq_shx, n_years)
 LMF_bT_shx  <- compute_LMF(res_bT_shx$freq, out_freq_bT, out_freq_shx, n_years)
 
-saveRDS(list(LMF_sst_bT = LMF_sst_bT, LMF_sst_shx = LMF_sst_shx, LMF_bT_shx = LMF_bT_shx),
-        file.path(output_dir, "LMF_grid.rds"))
+# saveRDS(list(LMF_sst_bT = LMF_sst_bT, LMF_sst_shx = LMF_sst_shx, LMF_bT_shx = LMF_bT_shx),
+        # file.path(output_dir, "LMF_grid.rds"))
 
 LMF_data    <- readRDS(file.path(output_dir, "LMF_grid.rds"))
 LMF_sst_bT  <- LMF_data$LMF_sst_bT
@@ -2034,11 +2260,114 @@ p_triple <- ggplot(df_fractions, aes(x = time, y = triple)) +
 
 p_sst / p_bT / p_shx / p_compound / p_triple
 
+p_sst / p_bT / p_shx
+
+
 ## Maps ------------------------------------------------------------------------
 
 plot_spatial_sf(res_sst_shx$freq, ocean_mask,  "SMHW x SHX Frequency", "Events/yr")
 plot_spatial_sf(res_bT_shx$freq, bottom_mask, "BMHW x SHX Frequency", "Events/yr")
 plot_spatial_sf(res_triple$freq, bottom_mask, "Triple Compound Frequency", "Events/yr")
+
+
+## Updated maps for presentation ------------------------------------------------
+
+plot_spatial_sf_counts <- function(mat, mask, title, legend_label,
+                                   every_nth = 1, max_lon_span = 10,
+                                   breaks = c(0, 1, 2, 3, 5, Inf),
+                                   labels = c("0", "1", "2", "3-4", "5+"),
+                                   palette = "plasma",
+                                   xlim = c(-180, -100), ylim = c(10, 80)) {
+  
+  mat_display <- mat
+  mat_display[mat_display == 0] <- NA
+  
+  sf_grid <- build_sf_grid(mat_display, mask, every_nth, max_lon_span)
+  sf_grid$bin <- cut(sf_grid$value, breaks = breaks, labels = labels,
+                     include.lowest = TRUE, right = FALSE)
+  
+  ggplot() +
+    geom_sf(data = land, fill = "grey15", color = "grey40", linewidth = 0.2) +
+    geom_sf(data = sf_grid, aes(fill = bin), color = NA) +
+    scale_fill_viridis_d(option = palette, name = legend_label, na.translate = FALSE) +
+    coord_sf(xlim = xlim, ylim = ylim, expand = FALSE) +
+    labs(title = title, subtitle = "MOM6 1993–2025 | Monthly",
+         x = "Longitude", y = "Latitude") +
+    theme_light() +
+    theme(
+      panel.background = element_rect(fill = "black", colour = NA),
+      panel.grid = element_line(colour = "grey20", linewidth = 0.15),
+      plot.background = element_rect(fill = "grey10", colour = NA),
+      plot.title = element_text(colour = "white", face = "bold"),
+      plot.subtitle = element_text(colour = "grey70"),
+      axis.text = element_text(colour = "grey80"),
+      axis.title = element_text(colour = "grey80"),
+      legend.background = element_rect(fill = "grey10", colour = NA),
+      legend.key = element_rect(fill = "black", colour = NA),
+      legend.text = element_text(colour = "white"),
+      legend.title = element_text(colour = "white")
+    )
+}
+
+
+# SMHW x BMHW
+plot_spatial_sf_counts(res_sst_bT$n_events, bottom_mask,
+                       "SMHW × BMHW Number of Events", "Events",
+                       palette = "viridis")
+
+# SMHW x SHX
+plot_spatial_sf_counts(res_sst_shx$n_events, ocean_mask,
+                       "SMHW × SHX Number of Events", "Events",
+                       palette = "cividis")
+
+# BMHW × SHX
+# find the 5+ hotspots specifically
+bT_shx_hotspots <- which(res_bT_shx$n_events >= 5 & bottom_mask, arr.ind = TRUE)
+
+bT_shx_hotspot_df <- data.frame(
+  lon = ifelse(lon2d[bT_shx_hotspots] > 180, lon2d[bT_shx_hotspots] - 360, lon2d[bT_shx_hotspots]),
+  lat = lat2d[bT_shx_hotspots],
+  n_events = res_bT_shx$n_events[bT_shx_hotspots]
+)
+print(bT_shx_hotspot_df)   # check what you're actually circling before plotting
+
+plot_spatial_sf_counts(res_bT_shx$n_events, bottom_mask,
+                       "BMHW × SHX Number of Events", "Events") +
+  geom_point(data = bT_shx_hotspot_df, aes(x = lon, y = lat),
+             shape = 21, size = 6, stroke = 1.8,
+             color = "white", fill = NA)
+
+# triple compound
+# recompute hotspot_df with the lon-fix from before, if not already in session
+triple_hotspots <- which(res_triple$n_events > 0 & bottom_mask, arr.ind = TRUE)
+hotspot_df <- data.frame(
+  lon = ifelse(lon2d[triple_hotspots] > 180, lon2d[triple_hotspots] - 360, lon2d[triple_hotspots]),
+  lat = lat2d[triple_hotspots],
+  n_events = res_triple$n_events[triple_hotspots]
+)
+
+# Full domain
+plot_spatial_sf_counts(res_triple$n_events, bottom_mask,
+                       "Triple Compound Number of Events", "Events") +
+  geom_point(data = hotspot_df, aes(x = lon, y = lat),
+             shape = 21, size = 6, stroke = 1.8,
+             color = "cyan", fill = NA)
+
+# Zoom 1: 48-75°N, west boundary unchanged (-180), east cut at -120
+plot_spatial_sf_counts(res_triple$n_events, bottom_mask,
+                       "Triple Compound — Northern Zoom", "Events",
+                       xlim = c(-180, -120), ylim = c(48, 75)) +
+  geom_point(data = hotspot_df, aes(x = lon, y = lat),
+             shape = 21, size = 8, stroke = 2,
+             color = "cyan", fill = NA)
+
+# Zoom 2: 15-35°N, -122 to -100
+plot_spatial_sf_counts(res_triple$n_events, bottom_mask,
+                       "Triple Compound — Southern Zoom", "Events",
+                       xlim = c(-122, -100), ylim = c(15, 35)) +
+  geom_point(data = hotspot_df, aes(x = lon, y = lat),
+             shape = 21, size = 8, stroke = 2,
+             color = "cyan", fill = NA)
 
 
 # PART 7: Regional Analyses ----------------------------------------------------
